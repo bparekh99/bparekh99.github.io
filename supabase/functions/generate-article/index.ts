@@ -36,7 +36,7 @@ Create a satirical article that:
 - Contains NO profanity, violence, illegal content, or discriminatory language
 - Does NOT reference real companies or people
 - Uses hospitality industry terminology and SEO-friendly keywords
-- Is exactly 350 words or less
+- Is exactly 250-350 words
 
 Respond with a JSON object containing:
 {
