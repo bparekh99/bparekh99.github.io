@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Newspaper, Users, TrendingUp, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ArticleOutput {
   headline: string;
@@ -91,69 +92,37 @@ const ArticleGenerator = () => {
 
     setIsGenerating(true);
 
-    // Simulate AI generation with realistic hospitality industry satirical content
-    setTimeout(() => {
-      const selectedType = articleTypes.find(type => type.value === articleType);
-      const mockOutput = generateMockArticle(idea, articleType, selectedType?.label || '');
-      setOutput(mockOutput);
-      setIsGenerating(false);
-      
-      toast({
-        title: "Article Generated!",
-        description: "Your satirical hospitality article is ready.",
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-article', {
+        body: {
+          idea: idea,
+          articleType: articleType
+        }
       });
-    }, 2000);
-  };
 
-  const generateMockArticle = (userIdea: string, type: string, typeName: string): ArticleOutput => {
-    // This would be replaced with actual AI generation in a real implementation
-    const headlines = {
-      'breaking-news': [
-        "Local Hotel Chain Announces Revolutionary 'Self-Service Luxury' Initiative",
-        "Breaking: Hospitality Industry Discovers Guests Actually Want Clean Rooms",
-        "Fictional Resort Group Unveils Groundbreaking 'Customer First' Policy"
-      ],
-      'guest-relations': [
-        "Guest Complaint: Hotel WiFi Password 'Welcome123' Too Complicated to Remember",
-        "Five-Star Review: 'The Bed Was Exactly Bed-Shaped,' Says Delighted Guest",
-        "Front Desk Chronicles: Guest Asks if Ocean View Room Includes Actual Ocean"
-      ],
-      'industry-deep-dives': [
-        "Investigation: Secret Society of Hotel Managers Who Actually Respond to Emails",
-        "Industry Deep Dive: The Mysterious Case of the Always-Working Ice Machine",
-        "Exclusive: Restaurant Manager Reveals Ancient Secret of Consistent Food Quality"
-      ],
-      'travel-tourism': [
-        "Travel Alert: Popular Destination Now Requires Visitors to Actually Enjoy Themselves",
-        "New Tourism Trend: Travelers Seeking Destinations with Working Elevators",
-        "Breaking Travel News: Airport Security Line Moves at Normal Human Speed"
-      ]
-    };
+      if (error) {
+        throw error;
+      }
 
-    const headline = headlines[type as keyof typeof headlines][0];
-    
-    const article = `In a shocking development that has left hospitality professionals across the industry scratching their heads, ${headline.toLowerCase().slice(0, -1)} has become the latest trend to sweep through the sector.
-
-Sources close to the matter report that this revolutionary approach represents a significant departure from traditional hospitality practices. Industry experts are calling it "unprecedented" and "surprisingly logical," though many remain skeptical about its long-term viability.
-
-"We've never seen anything quite like this," said a fictional industry analyst who wished to remain anonymous. "The implications for the entire hospitality sector could be enormous, assuming anyone actually follows through with implementation."
-
-The announcement has sparked heated debate among hospitality professionals, with some calling it "the future of the industry" while others dismiss it as "just another fad that will disappear faster than a hotel's complimentary breakfast buffet."
-
-Local establishments have reported mixed reactions from guests, with many expressing surprise and confusion at these new approaches to service. "I didn't know what to expect," said one fictional hotel guest. "But somehow, it actually worked exactly as advertised."
-
-As the industry continues to adapt to changing expectations and market demands, this latest development serves as a reminder that sometimes the most innovative solutions are also the most obvious ones. Whether this trend will catch on remains to be seen, but early indicators suggest that common sense might actually be the next big thing in hospitality.`;
-
-    const excerpt = `Industry professionals are baffled by the latest trend sweeping through hospitality: actually implementing logical solutions to common problems. Experts call it "unprecedented" as establishments report surprising success with this revolutionary approach.`;
-
-    const socialCaption = `The hospitality industry's latest shocking trend will leave you speechless! 😱 Who would have thought common sense could be so revolutionary? #HospitalityNews #IndustryTrends #HotelLife #RestaurantLife #HospitalityHumor #ServiceIndustry`;
-
-    return {
-      headline,
-      article,
-      excerpt,
-      socialCaption
-    };
+      if (data && data.headline && data.article && data.excerpt && data.socialCaption) {
+        setOutput(data);
+        toast({
+          title: "Article Generated!",
+          description: "Your satirical hospitality article is ready.",
+        });
+      } else {
+        throw new Error('Invalid response format from AI');
+      }
+    } catch (error) {
+      console.error('Error generating article:', error);
+      toast({
+        title: "Generation Failed",
+        description: "There was an error generating your article. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const wordCount = idea.trim().split(/\s+/).filter(word => word.length > 0).length;
