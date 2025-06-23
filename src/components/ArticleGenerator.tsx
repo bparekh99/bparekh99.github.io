@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -175,7 +176,14 @@ const ArticleGenerator = () => {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold text-slate-800">Hospitality FN Article Generator</h1>
+        <div className="flex items-center justify-center mb-6">
+          <img 
+            src="https://hospitalityfn.com/wp-content/uploads/2025/05/Screenshot-2025-05-21-at-12.33.28%E2%80%AFPM-768x297.png" 
+            alt="Hospitality FN Logo" 
+            className="h-16 w-auto"
+          />
+        </div>
+        <h1 className="text-4xl font-bold text-slate-800">Article Generator</h1>
         <p className="text-lg text-slate-600">Transform your ideas into satirical hospitality industry content</p>
         <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
           <Shield className="w-4 h-4" />
