@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, Newspaper, Users, TrendingUp, MapPin } from 'lucide-react';
+import { AlertCircle, Newspaper, Users, TrendingUp, MapPin, Shield, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -16,11 +15,19 @@ interface ArticleOutput {
   socialCaption: string;
 }
 
+interface ErrorResponse {
+  error: string;
+  code: string;
+  details?: string[];
+  resetTime?: number;
+}
+
 const ArticleGenerator = () => {
   const [idea, setIdea] = useState('');
   const [articleType, setArticleType] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [output, setOutput] = useState<ArticleOutput | null>(null);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{ resetTime?: number } | null>(null);
   const { toast } = useToast();
 
   const articleTypes = [
@@ -50,16 +57,54 @@ const ArticleGenerator = () => {
     }
   ];
 
-  const checkContentAppropriate = (text: string): boolean => {
-    const inappropriatePatterns = [
-      /\b(fuck|shit|damn|hell|ass|bitch|bastard)\b/i,
-      /\b(kill|murder|death|violence|harm|hurt)\b/i,
-      /\b(illegal|drugs|cocaine|marijuana|heroin)\b/i,
-      /\b(hate|racism|sexism|discrimination)\b/i,
-      /\b(sexual|porn|explicit)\b/i
-    ];
+  const handleError = (error: any) => {
+    console.error('Generation error:', error);
     
-    return !inappropriatePatterns.some(pattern => pattern.test(text));
+    if (error.code) {
+      switch (error.code) {
+        case 'RATE_LIMIT_EXCEEDED':
+          setRateLimitInfo({ resetTime: error.resetTime });
+          toast({
+            title: "Rate Limit Exceeded",
+            description: "You've reached the maximum number of requests. Please wait before trying again.",
+            variant: "destructive"
+          });
+          break;
+        case 'CONTENT_VIOLATION':
+          toast({
+            title: "Content Policy Violation",
+            description: "Your content doesn't meet our community guidelines. Please revise and try again.",
+            variant: "destructive"
+          });
+          break;
+        case 'VALIDATION_ERROR':
+          toast({
+            title: "Input Validation Error",
+            description: error.details?.join(', ') || "Please check your input and try again.",
+            variant: "destructive"
+          });
+          break;
+        case 'PAYLOAD_TOO_LARGE':
+          toast({
+            title: "Content Too Long",
+            description: "Your article idea is too long. Please shorten it and try again.",
+            variant: "destructive"
+          });
+          break;
+        default:
+          toast({
+            title: "Generation Failed",
+            description: error.error || "There was an error generating your article. Please try again.",
+            variant: "destructive"
+          });
+      }
+    } else {
+      toast({
+        title: "Generation Failed",
+        description: "There was an error generating your article. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const generateArticle = async () => {
@@ -67,6 +112,15 @@ const ArticleGenerator = () => {
       toast({
         title: "Idea too short",
         description: "Please enter at least 100 words for your article idea.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (idea.length > 5000) {
+      toast({
+        title: "Idea too long",
+        description: "Please keep your article idea under 5000 characters.",
         variant: "destructive"
       });
       return;
@@ -81,21 +135,12 @@ const ArticleGenerator = () => {
       return;
     }
 
-    if (!checkContentAppropriate(idea)) {
-      toast({
-        title: "Inappropriate Content Detected",
-        description: "Your content contains inappropriate language or themes that are not suitable for a public satirical publication. Please revise your idea to avoid profanity, violence, illegal activities, or discriminatory content.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsGenerating(true);
 
     try {
       const { data, error } = await supabase.functions.invoke('generate-article', {
         body: {
-          idea: idea,
+          idea: idea.trim(),
           articleType: articleType
         }
       });
@@ -106,33 +151,53 @@ const ArticleGenerator = () => {
 
       if (data && data.headline && data.article && data.excerpt && data.socialCaption) {
         setOutput(data);
+        setRateLimitInfo(null);
         toast({
           title: "Article Generated!",
           description: "Your satirical hospitality article is ready.",
         });
+      } else if (data && data.error) {
+        throw data;
       } else {
         throw new Error('Invalid response format from AI');
       }
     } catch (error) {
-      console.error('Error generating article:', error);
-      toast({
-        title: "Generation Failed",
-        description: "There was an error generating your article. Please try again.",
-        variant: "destructive"
-      });
+      handleError(error);
     } finally {
       setIsGenerating(false);
     }
   };
 
   const wordCount = idea.trim().split(/\s+/).filter(word => word.length > 0).length;
+  const charCount = idea.length;
+  const isRateLimited = rateLimitInfo?.resetTime && rateLimitInfo.resetTime > Date.now();
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       <div className="text-center space-y-4">
         <h1 className="text-4xl font-bold text-slate-800">Hospitality FN Article Generator</h1>
         <p className="text-lg text-slate-600">Transform your ideas into satirical hospitality industry content</p>
+        <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+          <Shield className="w-4 h-4" />
+          <span>Secure • Rate Limited • Content Filtered</span>
+        </div>
       </div>
+
+      {isRateLimited && (
+        <Card className="border-2 border-orange-200 bg-orange-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-orange-600" />
+              <div>
+                <p className="font-medium text-orange-800">Rate Limit Active</p>
+                <p className="text-sm text-orange-600">
+                  Please wait before making another request. This helps us maintain service quality and prevent abuse.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-2 border-slate-200">
         <CardHeader>
@@ -144,26 +209,33 @@ const ArticleGenerator = () => {
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">
-              Your Article Idea (minimum 100 words)
+              Your Article Idea (100-5000 characters)
             </label>
             <Textarea
               placeholder="Enter your satirical idea for the hospitality industry. Be creative but keep it appropriate for a public humor publication..."
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
               className="min-h-[120px] resize-none"
+              maxLength={5000}
             />
             <div className="flex justify-between items-center">
-              <p className="text-sm text-slate-500">
-                Word count: {wordCount}
-              </p>
+              <div className="flex gap-4 text-sm text-slate-500">
+                <span>Words: {wordCount}</span>
+                <span>Characters: {charCount}/5000</span>
+              </div>
               {wordCount < 100 && (
                 <Badge variant="outline" className="text-orange-600 border-orange-600">
                   {100 - wordCount} words needed
                 </Badge>
               )}
-              {wordCount >= 100 && (
+              {wordCount >= 100 && charCount <= 5000 && (
                 <Badge variant="outline" className="text-green-600 border-green-600">
                   Ready to generate
+                </Badge>
+              )}
+              {charCount > 5000 && (
+                <Badge variant="outline" className="text-red-600 border-red-600">
+                  Too long
                 </Badge>
               )}
             </div>
@@ -195,8 +267,8 @@ const ArticleGenerator = () => {
 
           <Button 
             onClick={generateArticle}
-            disabled={isGenerating || wordCount < 100 || !articleType}
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            disabled={isGenerating || wordCount < 100 || charCount > 5000 || !articleType || isRateLimited}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             size="lg"
           >
             {isGenerating ? 'Generating Article...' : 'Generate Satirical Article'}
@@ -252,12 +324,14 @@ const ArticleGenerator = () => {
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
             <div className="text-sm text-slate-600">
-              <p className="font-medium mb-2">Content Guidelines:</p>
+              <p className="font-medium mb-2">Enhanced Security & Content Guidelines:</p>
               <ul className="space-y-1 list-disc list-inside">
-                <li>Keep content satirical but professional</li>
+                <li>All content is validated server-side for appropriateness</li>
+                <li>Rate limiting: 5 requests per minute, 20 per day</li>
                 <li>No profanity, violence, illegal activities, or discriminatory content</li>
-                <li>Avoid referencing real companies or people</li>
+                <li>Avoid URLs, email addresses, or personal information</li>
                 <li>Focus on hospitality industry humor and satire</li>
+                <li>Content must be 100-5000 characters</li>
               </ul>
             </div>
           </div>
