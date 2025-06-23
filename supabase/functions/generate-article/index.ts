@@ -15,15 +15,28 @@ const RATE_LIMIT_PER_MINUTE = 5;
 const RATE_LIMIT_PER_DAY = 20;
 const MAX_PAYLOAD_SIZE = 10240; // 10KB
 
-// Enhanced content filtering patterns
+// Enhanced content filtering with context awareness
 const inappropriatePatterns = [
-  /\b(fuck|shit|damn|hell|ass|bitch|bastard|cunt|cock|dick)\b/gi,
-  /\b(kill|murder|death|violence|harm|hurt|attack|assault|rape)\b/gi,
-  /\b(illegal|drugs|cocaine|marijuana|heroin|meth|crack|cannabis)\b/gi,
-  /\b(hate|racism|sexism|discrimination|nazi|terrorist|bomb)\b/gi,
-  /\b(sexual|porn|explicit|nude|xxx|sex|orgasm|masturbat)\b/gi,
-  /\b(suicide|self-harm|cutting|overdose)\b/gi,
-  /\b(scam|fraud|phishing|hack|exploit|malware)\b/gi
+  // Only flag extreme profanity in inappropriate contexts
+  /\b(fuck|shit|damn|hell|ass|bitch|bastard|cunt|cock|dick)\s+(you|off|this|that)/gi,
+  
+  // Violence - but be more specific to avoid false positives
+  /\b(kill|murder|death|violence|harm|hurt|attack|assault|rape)\s+(people|someone|users|guests|customers)/gi,
+  
+  // Illegal activities
+  /\b(sell|buy|use|distribute)\s+(drugs|cocaine|marijuana|heroin|meth|crack|cannabis)/gi,
+  
+  // Hate speech - must be directed
+  /\b(hate|racism|sexism|discrimination)\s+(against|towards|all|those|these)\s+\w+/gi,
+  
+  // Sexual content - explicit only
+  /\b(porn|explicit|nude|xxx|sex|orgasm|masturbat)\s+(content|videos|images|sites)/gi,
+  
+  // Self-harm
+  /\b(suicide|self-harm|cutting|overdose)\s+(attempt|methods|ways|how)/gi,
+  
+  // Criminal activities
+  /\b(scam|fraud|phishing|hack|exploit|malware)\s+(people|users|customers|data)/gi
 ];
 
 const allowedArticleTypes = ['breaking-news', 'guest-relations', 'industry-deep-dives', 'travel-tourism'];
@@ -91,11 +104,13 @@ function validateInput(data: any): { valid: boolean; errors: string[] } {
 
 function checkContentAppropriate(text: string): { appropriate: boolean; violations: string[] } {
   const violations: string[] = [];
+  const lowerText = text.toLowerCase();
   
+  // Check for contextual inappropriate content
   for (const pattern of inappropriatePatterns) {
     const matches = text.match(pattern);
     if (matches) {
-      violations.push(`Inappropriate content detected: ${matches[0]}`);
+      violations.push(`Inappropriate content pattern detected: ${matches[0]}`);
     }
   }
   
@@ -110,6 +125,18 @@ function checkContentAppropriate(text: string): { appropriate: boolean; violatio
   
   if (text.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/)) {
     violations.push('Email addresses not allowed');
+  }
+  
+  // Context-aware checks for hospitality industry content
+  const hospitalityContext = /\b(hotel|resort|restaurant|guest|customer|service|hospitality|wifi|portal|captive|network|data|study|analyst)\b/gi;
+  const hasHospitalityContext = hospitalityContext.test(text);
+  
+  // If content is about hospitality industry and contains words like "hate" in appropriate context, allow it
+  if (hasHospitalityContext && lowerText.includes('hate') && 
+      (lowerText.includes('hate captive portal') || lowerText.includes('people hate') || lowerText.includes('guests hate'))) {
+    // Remove any violations related to the word "hate" in this context
+    const filteredViolations = violations.filter(v => !v.toLowerCase().includes('hate'));
+    return { appropriate: filteredViolations.length === 0, violations: filteredViolations };
   }
   
   return { appropriate: violations.length === 0, violations };
@@ -184,13 +211,14 @@ serve(async (req) => {
 
     const { idea, articleType } = requestData;
 
-    // Content appropriateness check
+    // Content appropriateness check with improved context awareness
     const contentCheck = checkContentAppropriate(idea);
     if (!contentCheck.appropriate) {
       console.log(`Request rejected: inappropriate content from IP: ${clientIP}`, contentCheck.violations);
       return new Response(JSON.stringify({ 
         error: 'Content does not meet community guidelines',
-        code: 'CONTENT_VIOLATION'
+        code: 'CONTENT_VIOLATION',
+        details: contentCheck.violations
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -281,11 +309,17 @@ Keep the tone satirical but professional. Make it obviously fake/satirical while
         throw new Error('Generated content missing required fields');
       }
       
-      // Final content check on generated content
+      // Final content check on generated content (less strict for AI-generated content)
       const generatedContentCheck = checkContentAppropriate(JSON.stringify(articleData));
-      if (!generatedContentCheck.appropriate) {
-        console.log(`Generated content rejected for IP: ${clientIP}`, generatedContentCheck.violations);
-        throw new Error('Generated content inappropriate');
+      if (!generatedContentCheck.appropriate && generatedContentCheck.violations.length > 0) {
+        console.log(`Generated content flagged for IP: ${clientIP}`, generatedContentCheck.violations);
+        // Only reject if there are serious violations, not contextual ones
+        const seriousViolations = generatedContentCheck.violations.filter(v => 
+          !v.toLowerCase().includes('hate') || !v.toLowerCase().includes('pattern')
+        );
+        if (seriousViolations.length > 0) {
+          throw new Error('Generated content inappropriate');
+        }
       }
       
     } catch (parseError) {
