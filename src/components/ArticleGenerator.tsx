@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Newspaper, Users, TrendingUp, MapPin, Shield, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import UserProfile from '@/components/UserProfile';
 
 interface ArticleOutput {
   headline: string;
@@ -175,6 +175,8 @@ const ArticleGenerator = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
+      <UserProfile />
+      
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center mb-6">
           <img 
