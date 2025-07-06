@@ -50,16 +50,10 @@ serve(async (req) => {
 
     console.log('Request data received, preparing WordPress API call');
 
-    // Get WordPress credentials from environment
-    const wpUsername = Deno.env.get('WORDPRESS_USERNAME');
-    const wpPassword = Deno.env.get('WORDPRESS_APP_PASSWORD');
-    
-    if (!wpUsername || !wpPassword) {
-      console.error('WordPress credentials not configured');
-      throw new Error('WordPress credentials not configured');
-    }
+    // WordPress API key
+    const wpApiKey = 'xyjp NWY1 c0uR z3gT M0g9 OPzI';
 
-    console.log('WordPress credentials found, making API call');
+    console.log('Using API key authentication for WordPress');
 
     // Create the WordPress post data
     const wordpressPostData = {
@@ -70,12 +64,12 @@ serve(async (req) => {
       author: 1, // Default to admin user
     };
 
-    // Make the request to WordPress REST API
+    // Make the request to WordPress REST API using API key
     const wpResponse = await fetch('https://hospitalityfn.com/wp-json/wp/v2/posts', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + btoa(`${wpUsername}:${wpPassword}`)
+        'Authorization': `Bearer ${wpApiKey}`
       },
       body: JSON.stringify(wordpressPostData)
     });
