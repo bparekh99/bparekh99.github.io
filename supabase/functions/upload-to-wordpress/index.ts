@@ -9,14 +9,18 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('WordPress upload function called');
+    
     // Get the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('No authorization header found');
       throw new Error('No authorization header');
     }
 
@@ -30,26 +34,32 @@ serve(async (req) => {
     // Verify the user is authenticated
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
+      console.error('User authentication failed:', userError);
       throw new Error('User not authenticated');
     }
+
+    console.log('User authenticated:', user.email);
 
     const requestData = await req.json();
     const { headline, article, excerpt } = requestData;
 
     if (!headline || !article || !excerpt) {
+      console.error('Missing required fields:', { headline: !!headline, article: !!article, excerpt: !!excerpt });
       throw new Error('Missing required fields: headline, article, or excerpt');
     }
 
-    // For WordPress API, we'll need to use Application Passwords since Google OAuth 
-    // integration with WordPress requires specific setup on the WordPress side.
-    // The user will need to generate an Application Password in their WordPress admin.
-    
+    console.log('Request data received, preparing WordPress API call');
+
+    // Get WordPress credentials from environment
     const wpUsername = Deno.env.get('WORDPRESS_USERNAME');
-    const wpPassword = Deno.env.get('WORDPRESS_APP_PASSWORD'); // Application Password, not regular password
+    const wpPassword = Deno.env.get('WORDPRESS_APP_PASSWORD');
     
     if (!wpUsername || !wpPassword) {
+      console.error('WordPress credentials not configured');
       throw new Error('WordPress credentials not configured');
     }
+
+    console.log('WordPress credentials found, making API call');
 
     // Create the WordPress post data
     const wordpressPostData = {
@@ -57,7 +67,7 @@ serve(async (req) => {
       content: article,
       excerpt: excerpt,
       status: 'draft',
-      author: 1, // Default to admin user, can be made configurable
+      author: 1, // Default to admin user
     };
 
     // Make the request to WordPress REST API
@@ -69,6 +79,8 @@ serve(async (req) => {
       },
       body: JSON.stringify(wordpressPostData)
     });
+
+    console.log('WordPress API response status:', wpResponse.status);
 
     if (!wpResponse.ok) {
       const errorText = await wpResponse.text();
