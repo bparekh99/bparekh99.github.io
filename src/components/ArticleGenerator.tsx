@@ -4,7 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, Newspaper, Users, TrendingUp, MapPin, Shield, Clock } from 'lucide-react';
+import { AlertCircle, Newspaper, Users, TrendingUp, MapPin, Shield, Clock, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import UserProfile from '@/components/UserProfile';
@@ -27,6 +27,7 @@ const ArticleGenerator = () => {
   const [idea, setIdea] = useState('');
   const [articleType, setArticleType] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [output, setOutput] = useState<ArticleOutput | null>(null);
   const [rateLimitInfo, setRateLimitInfo] = useState<{ resetTime?: number } | null>(null);
   const { toast } = useToast();
@@ -169,6 +170,44 @@ const ArticleGenerator = () => {
     }
   };
 
+  const uploadToWordPress = async () => {
+    if (!output) return;
+
+    setIsUploading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('upload-to-wordpress', {
+        body: {
+          headline: output.headline,
+          article: output.article,
+          excerpt: output.excerpt
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.success) {
+        toast({
+          title: "Uploaded to WordPress!",
+          description: `Article has been saved as a draft. Post ID: ${data.postId}`,
+        });
+      } else {
+        throw new Error(data?.error || 'Upload failed');
+      }
+    } catch (error: any) {
+      console.error('WordPress upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "There was an error uploading to WordPress. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const wordCount = idea.trim().split(/\s+/).filter(word => word.length > 0).length;
   const charCount = idea.length;
   const isRateLimited = rateLimitInfo?.resetTime && rateLimitInfo.resetTime > Date.now();
@@ -290,7 +329,18 @@ const ArticleGenerator = () => {
         <div className="space-y-6">
           <Card className="border-2 border-green-200 bg-green-50">
             <CardHeader>
-              <CardTitle className="text-green-800">Generated Article</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-green-800">Generated Article</CardTitle>
+                <Button 
+                  onClick={uploadToWordPress}
+                  disabled={isUploading}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  size="sm"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {isUploading ? 'Uploading...' : 'Upload to WordPress'}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
